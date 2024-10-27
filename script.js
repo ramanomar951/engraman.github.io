@@ -1,3 +1,6 @@
+alert(
+  "بەخێربێن\nبەهیوای سوود وەرگرتن\nئەم ماڵپەرە لەژێرچاککردنە \n ENG RAMAN KOYE"
+);
 const chatBody = document.querySelector(".chat-body");
 const messageInput = document.querySelector(".message-input");
 const sendMessageButton = document.querySelector("#send-message");
