@@ -1,216 +1,94 @@
-alert(
-  "بەخێربێن\nبەهیوای سوود وەرگرتن\nئەم ماڵپەرە لەژێرچاککردنە \n ENG RAMAN KOYE"
-);
-const chatBody = document.querySelector(".chat-body");
-const messageInput = document.querySelector(".message-input");
-const sendMessageButton = document.querySelector("#send-message");
-const fileInput = document.querySelector("#file-input");
-const fileUploadWrapper = document.querySelector(".file-upload-wrapper");
-const fileCancelButton = document.querySelector("#file-cancel");
+const chatbotToggler = document.querySelector(".chatbot-toggler");
+const closeBtn = document.querySelector(".close-btn");
+const chatbox = document.querySelector(".chatbox");
+const chatInput = document.querySelector(".chat-input textarea");
+const sendChatBtn = document.querySelector(".chat-input span");
 
-// API setup
-const API_KEY = "AIzaSyASsfF8TzR2ARAygrDs79RpunBJOaTHv70";
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+let userMessage = null; // Variable to store user's message
+const inputInitHeight = chatInput.scrollHeight;
 
-const userData = {
-  message: null,
-  file: {
-    data: null,
-    mime_type: null,
-  },
-};
+// API configuration
+const API_KEY = "PASTE-YOUR-API-KEY"; // Your API key here
+const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${API_KEY}`;
 
-// Create message element with dynamic classes and return it
-const createMessageElement = (content, ...classes) => {
-  const div = document.createElement("div");
-  div.classList.add("message", ...classes);
-  div.innerHTML = content;
-  return div;
-};
+const createChatLi = (message, className) => {
+  // Create a chat <li> element with passed message and className
+  const chatLi = document.createElement("li");
+  chatLi.classList.add("chat", `${className}`);
+  let chatContent = className === "outgoing" ? `<p></p>` : `<span class="material-symbols-outlined">smart_toy</span><p></p>`;
+  chatLi.innerHTML = chatContent;
+  chatLi.querySelector("p").textContent = message;
+  return chatLi; // return chat <li> element
+}
 
-// Generate bot response using API
-const generateBotResponse = async (incomingMessageDiv) => {
-  const messageElement = incomingMessageDiv.querySelector(".message-text");
+const generateResponse = async (chatElement) => {
+  const messageElement = chatElement.querySelector("p");
 
-  // API request options
+  // Define the properties and message for the API request
   const requestOptions = {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: userData.message },
-            ...(userData.file.data ? [{ inline_data: userData.file }] : []),
-          ],
-        },
-      ],
+    body: JSON.stringify({ 
+      contents: [{ 
+        role: "user", 
+        parts: [{ text: userMessage }] 
+      }] 
     }),
-  };
+  }
 
+  // Send POST request to API, get response and set the reponse as paragraph text
   try {
-    // Fetch bot response from API
     const response = await fetch(API_URL, requestOptions);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error.message);
-
-    // Extract and display bot's response text
-    const apiResponseText = data.candidates[0].content.parts[0].text
-      .replace(/\*\*(.*?)\*\*/g, "$1")
-      .trim();
-    messageElement.innerText = apiResponseText;
+    
+    // Get the API response text and update the message element
+    messageElement.textContent = data.candidates[0].content.parts[0].text.replace(/\*\*(.*?)\*\*/g, '$1');
   } catch (error) {
-    // Handle error in API response
-    console.log(error);
-    messageElement.innerText = error.message;
-    messageElement.style.color = "#ff0000";
+    // Handle error
+    messageElement.classList.add("error");
+    messageElement.textContent = error.message;
   } finally {
-    // Reset user's file data, remove thinking indicator, and scroll chat to bottom
-    userData.file = {};
-    incomingMessageDiv.classList.remove("thinking");
-    chatBody.scrollTo({ top: chatBody.scrollHeight, behavior: "smooth" });
-  }
-};
-
-// Handle outgoing user messages
-const handleOutgoingMessage = (e) => {
-  e.preventDefault();
-  userData.message = messageInput.value.trim();
-  messageInput.value = "";
-  fileUploadWrapper.classList.remove("file-uploaded");
-
-  // Create and display user message
-  const messageContent = `<div class="message-text"></div>
-  ${
-    userData.file.data
-      ? `<img src="data:${userData.file.mime_type};base64,${userData.file.data}" class="attachment" />`
-      : ""
-  }`;
-  const outgoingMessageDiv = createMessageElement(
-    messageContent,
-    "user-message"
-  );
-  outgoingMessageDiv.querySelector(".message-text").textContent =
-    userData.message;
-  chatBody.appendChild(outgoingMessageDiv);
-  chatBody.scrollTo({ top: chatBody.scrollHeight, behavior: "smooth" });
-
-  // Simulate bot response with thinking indicator after a delay
-  setTimeout(() => {
-    const messageContent = `</svg>
-          <div class="message-text">
-            <div class="thinking-indicator">
-              <div class="dot"></div>
-              <div class="dot"></div>
-              <div class="dot"></div>
-            </div>
-          </div>`;
-
-    const incomingMessageDiv = createMessageElement(
-      messageContent,
-      "bot-message",
-      "thinking"
-    );
-    chatBody.appendChild(incomingMessageDiv);
-    chatBody.scrollTo({ top: chatBody.scrollHeight, behavior: "smooth" });
-    generateBotResponse(incomingMessageDiv);
-  }, 600);
-};
-
-// Handle Enter key press for sending message
-messageInput.addEventListener("keydown", (e) => {
-  const userMessage = e.target.value.trim();
-  if (e.key === "Enter" && userMessage) {
-    handleOutgoingMessage(e);
-  }
-});
-
-// Handle file input change and preview selected file
-fileInput.addEventListener("change", async () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-
-  // Check for HEIC format (iOS specific) and convert if necessary
-  if (file.type === "image/heic" || file.type === "image/heif") {
-    // Convert HEIC to JPEG if the browser doesn't support it
-    const convertedData = await convertHeicToJpeg(file);
-    if (convertedData) {
-      userData.file = {
-        data: convertedData.base64String,
-        mime_type: "image/jpeg", // Changed MIME type to JPEG
-      };
-      fileUploadWrapper.querySelector("img").src = `data:image/jpeg;base64,${convertedData.base64String}`;
-    } else {
-      console.log("Failed to convert HEIC image.");
-      return;
-    }
-  } else {
-    // Handle standard image file types
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64String = e.target.result.split(",")[1];
-      fileUploadWrapper.querySelector("img").src = e.target.result;
-      fileUploadWrapper.classList.add("file-uploaded");
-
-      // Store file data in userData
-      userData.file = {
-        data: base64String,
-        mime_type: file.type,
-      };
-      fileInput.value = ""; // Reset file input
-    };
-    reader.readAsDataURL(file);
-  }
-});
-
-// Function to convert HEIC format to JPEG base64 (uses a library like heic2any)
-async function convertHeicToJpeg(heicFile) {
-  try {
-    const blob = await heic2any({ blob: heicFile, toType: "image/jpeg" });
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        resolve({
-          base64String: reader.result.split(",")[1],
-        });
-      };
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error("Error converting HEIC image:", error);
-    return null;
+    chatbox.scrollTo(0, chatbox.scrollHeight);
   }
 }
 
-// Cancel file upload
-fileCancelButton.addEventListener("click", () => {
-  userData.file = {};
-  fileUploadWrapper.classList.remove("file-uploaded");
+const handleChat = () => {
+  userMessage = chatInput.value.trim(); // Get user entered message and remove extra whitespace
+  if (!userMessage) return;
+
+  // Clear the input textarea and set its height to default
+  chatInput.value = "";
+  chatInput.style.height = `${inputInitHeight}px`;
+
+  // Append the user's message to the chatbox
+  chatbox.appendChild(createChatLi(userMessage, "outgoing"));
+  chatbox.scrollTo(0, chatbox.scrollHeight);
+
+  setTimeout(() => {
+    // Display "Thinking..." message while waiting for the response
+    const incomingChatLi = createChatLi("Thinking...", "incoming");
+    chatbox.appendChild(incomingChatLi);
+    chatbox.scrollTo(0, chatbox.scrollHeight);
+    generateResponse(incomingChatLi);
+  }, 600);
+}
+
+chatInput.addEventListener("input", () => {
+  // Adjust the height of the input textarea based on its content
+  chatInput.style.height = `${inputInitHeight}px`;
+  chatInput.style.height = `${chatInput.scrollHeight}px`;
 });
 
-// Initializing emoji picker
-const picker = new EmojiMart.Picker({
-  theme: "auto",
-  searchPosition: "google",
-  skinTonePosition: "preview",
-  previewPosition: "none",
-  onEmojiSelect: (emoji) => {
-    const { selectionStart: start, selectionEnd: end } = messageInput;
-    messageInput.setRangeText(emoji.native, start, end, "end");
-    messageInput.focus();
-  },
-  onClickOutside: (e) => {
-    if (e.target.id === "emoji-picker") {
-      document.body.classList.toggle("show-emoji-picker");
-    } else {
-      document.body.classList.remove("show-emoji-picker");
-    }
-  },
+chatInput.addEventListener("keydown", (e) => {
+  // If Enter key is pressed without Shift key and the window 
+  // width is greater than 800px, handle the chat
+  if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 800) {
+    e.preventDefault();
+    handleChat();
+  }
 });
 
-document.querySelector(".chat-form").appendChild(picker);
-
-sendMessageButton.addEventListener("click", (e) => handleOutgoingMessage(e));
-document
-  .querySelector("#file-upload")
-  .addEventListener("click", () => fileInput.click());
+sendChatBtn.addEventListener("click", handleChat);
+closeBtn.addEventListener("click", () => document.body.classList.remove("show-chatbot"));
+chatbotToggler.addEventListener("click", () => document.body.classList.toggle("show-chatbot"));
